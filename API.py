@@ -110,5 +110,5 @@ async def get_answer(question: UserQuestion):
         raise HTTPException(status_code=500, detail=f"Error processing the request: {e}")
     
 # Run the app on the assigned port in Render
-if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=int(os.environ.get("PORT", 3000)))    
+#if __name__ == "__main__":
+  #  uvicorn.run(app, host="0.0.0.0", port=int(os.environ.get("PORT", 8000)))    
