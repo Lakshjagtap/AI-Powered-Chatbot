@@ -1,6 +1,5 @@
 from fastapi import FastAPI, HTTPException, Form
 from pydantic import BaseModel
-from typing import List
 import pandas as pd
 from transformers import pipeline, AutoModel, AutoTokenizer
 from sklearn.feature_extraction.text import TfidfVectorizer
@@ -10,7 +9,8 @@ from nltk.corpus import stopwords
 from nltk.tokenize import word_tokenize
 import numpy as np
 from fastapi.middleware.cors import CORSMiddleware
-
+import asyncio
+import time
 
 # Initialize FastAPI app
 app = FastAPI()
@@ -23,6 +23,9 @@ app.add_middleware(
     allow_headers=["*"],  # Allows all headers
 )
 
+# Initialize model and vectorizer variables
+transformer_model = None
+vectorizer = None
 
 # Download NLTK resources
 nltk.download("punkt")
@@ -34,21 +37,22 @@ def preprocess_text(text):
     tokens = word_tokenize(text.lower())
     return " ".join([word for word in tokens if word.isalnum() and word not in stop_words])
 
-# Load transformer pipeline with a more advanced model
+# Load transformer model once and reuse it
 def load_transformer_model():
-    model_name = "bert-base-uncased"  # Improved model
-    tokenizer = AutoTokenizer.from_pretrained(model_name)
-    model = AutoModel.from_pretrained(model_name)
-    return pipeline("feature-extraction", model=model, tokenizer=tokenizer)
+    global transformer_model
+    if transformer_model is None:
+        model_name = "bert-base-uncased"  # Improved model
+        tokenizer = AutoTokenizer.from_pretrained(model_name)
+        model = AutoModel.from_pretrained(model_name)
+        transformer_model = pipeline("feature-extraction", model=model, tokenizer=tokenizer)
 
 # Compute similarity with TF-IDF
-def get_tfidf_similarity(user_question, faqs):
+def get_tfidf_similarity(user_question, faqs, vectorizer):
     questions = faqs["Question"].tolist()
     preprocessed_questions = [preprocess_text(q) for q in questions]
     preprocessed_user_question = preprocess_text(user_question)
 
-    vectorizer = TfidfVectorizer()
-    vectors = vectorizer.fit_transform(preprocessed_questions + [preprocessed_user_question])
+    vectors = vectorizer.transform(preprocessed_questions + [preprocessed_user_question])
     similarity_scores = cosine_similarity(vectors[-1], vectors[:-1]).flatten()
 
     best_match_idx = np.argmax(similarity_scores)
@@ -67,7 +71,7 @@ def find_columns(df, possible_question_names, possible_answer_names):
 
     return question_col, answer_col
 
-# Load FAQs CSV from local file
+# Load FAQs CSV from local file and initialize vectorizer
 try:
     faqs = pd.read_csv("conversation.csv")
 
@@ -82,6 +86,12 @@ try:
         faqs = faqs.rename(columns={question_col: "Question", answer_col: "Answer"})
     else:
         raise Exception("The CSV file must contain columns for questions and answers. Recognized names: 'Question', 'Questions', 'Answer', 'Answers'.")
+
+    # Preprocess the FAQ questions and fit the vectorizer
+    preprocessed_questions = [preprocess_text(q) for q in faqs["Question"].tolist()]
+    vectorizer = TfidfVectorizer()
+    vectorizer.fit(preprocessed_questions)
+
 except Exception as e:
     raise RuntimeError(f"Error loading the CSV file: {e}")
 
@@ -90,11 +100,18 @@ class UserQuestion(BaseModel):
     question: str
     similarity_threshold: float = 0.2
 
+@app.on_event("startup")
+async def startup_event():
+    load_transformer_model()  # Load model at startup
+
 @app.post("/answer")
 async def get_answer(question: UserQuestion):
     try:
+        # Timeout for long-running requests
+        start_time = time.time()
+
         # Calculate similarity
-        answer, score = get_tfidf_similarity(question.question, faqs)
+        answer, score = get_tfidf_similarity(question.question, faqs, vectorizer)
 
         if score > question.similarity_threshold:
             return {"status": "success", "answer": answer, "score": score}
@@ -104,5 +121,11 @@ async def get_answer(question: UserQuestion):
                 "message": "No suitable answer found. Try rephrasing your question.",
                 "score": score,
             }
+        
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error processing the request: {e}")
+
+    # Check if the request took too long
+    elapsed_time = time.time() - start_time
+    if elapsed_time > 5:  # Timeout after 5 seconds
+        raise HTTPException(status_code=500, detail="Request timed out. Try again later.")
