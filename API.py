@@ -68,7 +68,7 @@ def find_columns(df, possible_question_names, possible_answer_names):
 
 # Load FAQs CSV from local file
 try:
-    faqs = pd.read_csv("E:/VirtuNexa Internship Task 4/Backend chatbot/conversation.csv")
+    faqs = pd.read_csv("conversation.csv")
 
     # Define possible column names
     possible_question_names = ["question", "questions"]
