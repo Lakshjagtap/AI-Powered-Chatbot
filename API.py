@@ -11,9 +11,14 @@ from nltk.tokenize import word_tokenize
 import numpy as np
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+import logging
+import time
 
 # Initialize FastAPI app
 app = FastAPI()
+
+# Setup logging
+logging.basicConfig(level=logging.INFO)
 
 # CORS middleware to allow frontend to communicate with backend
 app.add_middleware(
@@ -97,9 +102,15 @@ class UserQuestion(BaseModel):
 @app.post("/answer")
 async def get_answer(question: UserQuestion):
     """Get the answer to the user's question."""
+    start_time = time.time()  # Start time tracking
+    logging.info(f"Received question: {question.question}")
+    
     try:
         # Calculate similarity between user input and FAQ data
         answer, score = get_tfidf_similarity(question.question, faqs)
+        
+        elapsed_time = time.time() - start_time  # Calculate elapsed time
+        logging.info(f"Processed in {elapsed_time:.2f} seconds")
 
         # If the similarity score is above the threshold, return the answer
         if score > question.similarity_threshold:
@@ -111,6 +122,8 @@ async def get_answer(question: UserQuestion):
                 "score": score,
             }
     except Exception as e:
+        elapsed_time = time.time() - start_time
+        logging.error(f"Error during request processing: {e} (Processed in {elapsed_time:.2f} seconds)")
         # Return a generic error message if something goes wrong
         raise HTTPException(status_code=500, detail=f"Error processing the request: {e}")
 
