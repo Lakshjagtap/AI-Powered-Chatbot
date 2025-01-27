@@ -1,3 +1,4 @@
+import os
 from fastapi import FastAPI, HTTPException, Form
 from pydantic import BaseModel
 from typing import List
@@ -10,6 +11,8 @@ from nltk.corpus import stopwords
 from nltk.tokenize import word_tokenize
 import numpy as np
 from fastapi.middleware.cors import CORSMiddleware
+import uvicorn
+
 
 # Initialize FastAPI app
 app = FastAPI()
@@ -105,3 +108,7 @@ async def get_answer(question: UserQuestion):
             }
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error processing the request: {e}")
+    
+# Run the app on the assigned port in Render
+if __name__ == "__main__":
+    uvicorn.run(app, host="0.0.0.0", port=int(os.environ.get("PORT", 3000)))    
