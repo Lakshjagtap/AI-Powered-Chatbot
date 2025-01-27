@@ -13,6 +13,30 @@ from fastapi.responses import JSONResponse
 import logging
 import time
 
+from nltk.data import find
+
+# Ensure that required NLTK data is downloaded
+def ensure_nltk_resources():
+    try:
+        # Check if 'punkt' is already available
+        find('tokenizers/punkt')
+    except LookupError:
+        logging.info("Downloading 'punkt'...")
+        nltk.download('punkt', download_dir='/opt/render/nltk_data')
+
+    try:
+        # Check if 'stopwords' is already available
+        find('corpora/stopwords')
+    except LookupError:
+        logging.info("Downloading 'stopwords'...")
+        nltk.download('stopwords', download_dir='/opt/render/nltk_data')
+
+# Point NLTK to the download directory (Render-compatible)
+nltk.data.path.append('/opt/render/nltk_data')
+
+# Call the function during initialization
+ensure_nltk_resources()
+
 # Initialize FastAPI app
 app = FastAPI()
 
