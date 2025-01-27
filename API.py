@@ -29,6 +29,7 @@ app.add_middleware(
 )
 
 # Download NLTK resources (download once, not repeatedly)
+nltk.download("punkt")
 nltk.download("punkt_tab")
 nltk.download("stopwords")
 
